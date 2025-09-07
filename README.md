@@ -1,4 +1,4 @@
-# EutiEutirev-tools
+# Eutirev-tools
 
 **Are you a slow typer (like me)?**  
 **Tired of remembering all the payloads?**  
