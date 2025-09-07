@@ -1,4 +1,4 @@
-# rev-tools
+# EutiEutirev-tools
 
 **Are you a slow typer (like me)?**  
 **Tired of remembering all the payloads?**  
@@ -19,18 +19,18 @@ Install straight from your GitHub profile (**PahutieEutiphron**):
 
 ```bash
 # revshells
-sudo curl -fsSL https://raw.githubusercontent.com/PahutieEutiphron/rev-tools/main/revshells -o /usr/local/bin/revshells \
+sudo curl -fsSL https://raw.githubusercontent.com/PahutieEutiphron/Eutirev-tools/main/revshells -o /usr/local/bin/revshells \
   && sudo chmod +x /usr/local/bin/revshells
 
 # server
-sudo curl -fsSL https://raw.githubusercontent.com/PahutieEutiphron/rev-tools/main/server -o /usr/local/bin/server \
+sudo curl -fsSL https://raw.githubusercontent.com/PahutieEutiphron/Eutirev-tools/main/server -o /usr/local/bin/server \
   && sudo chmod +x /usr/local/bin/server
 ```
 
 Or clone once and copy:
 ```bash
-git clone https://github.com/PahutieEutiphron/rev-tools.git
-cd rev-tools
+git clone https://github.com/PahutieEutiphron/Eutirev-tools.git
+cd Eutirev-tools
 sudo install -m 755 revshells /usr/local/bin/revshells
 sudo install -m 755 server    /usr/local/bin/server
 ```
@@ -105,8 +105,8 @@ server 8000 ./Tools
 
 ## Update
 ```bash
-sudo curl -fsSL https://raw.githubusercontent.com/PahutieEutiphron/rev-tools/main/revshells -o /usr/local/bin/revshells && sudo chmod +x /usr/local/bin/revshells
-sudo curl -fsSL https://raw.githubusercontent.com/PahutieEutiphron/rev-tools/main/server    -o /usr/local/bin/server    && sudo chmod +x /usr/local/bin/server
+sudo curl -fsSL https://raw.githubusercontent.com/PahutieEutiphron/Eutirev-tools/main/revshells -o /usr/local/bin/revshells && sudo chmod +x /usr/local/bin/revshells
+sudo curl -fsSL https://raw.githubusercontent.com/PahutieEutiphron/Eutirev-tools/main/server    -o /usr/local/bin/server    && sudo chmod +x /usr/local/bin/server
 ```
 
 ## Uninstall
@@ -120,3 +120,4 @@ PRs and tiny improvements welcome (extra payloads, `socat` variants, Windows dow
 ---
 
 **Built by**: [PahutieEutiphron](https://github.com/PahutieEutiphron) — because memory is for vulns, not for payload syntax.
+
