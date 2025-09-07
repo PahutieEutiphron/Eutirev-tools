@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+is_port(){ [[ "$1" =~ ^[0-9]+$ ]] && (( 1 <= $1 && $1 <= 65535 )); }
+
+# Defaults
+PORT="80"
+DIR="."
+
+# Arg parsing:
+# - server                 -> PORT=80,  DIR=.
+# - server 7777            -> PORT=7777, DIR=.
+# - server ./dir           -> PORT=80,  DIR=./dir
+# - server 7777 ./dir      -> PORT=7777, DIR=./dir
+# - server ./dir 7777      -> PORT=7777, DIR=./dir (also supported)
+case $# in
+  0) ;;
+  1)
+    if is_port "$1"; then
+      PORT="$1"
+    else
+      DIR="$1"
+    fi
+    ;;
+  2)
+    if is_port "$1" && ! is_port "$2"; then
+      PORT="$1"; DIR="$2"
+    elif ! is_port "$1" && is_port "$2"; then
+      DIR="$1"; PORT="$2"
+    elif is_port "$1" && is_port "$2"; then
+      PORT="$1"; DIR="$2"   # unusual, but keep old behavior
+    else
+      echo "Usage: server [PORT(default 80)] [DIR(default .)]" >&2; exit 1
+    fi
+    ;;
+  *) echo "Usage: server [PORT(default 80)] [DIR(default .)]" >&2; exit 1 ;;
+esac
+
+# Validate DIR
+if [[ ! -d "$DIR" ]]; then
+  echo "[-] Directory not found: $DIR" >&2
+  exit 1
+fi
+
+# Pick a friendly IP to display
+if ip -o -4 addr show tun0 &>/dev/null; then
+  IP=$(ip -o -4 addr show tun0 | awk '{print $4}' | cut -d/ -f1)
+else
+  IP=$(ip route get 1.1.1.1 | awk '{print $7; exit}')
+fi
+
+echo "[*] Serving '$DIR' on http://$IP:$PORT (0.0.0.0:$PORT)" >&2
+
+# Prefer authbind if available & low port, else sudo; otherwise no root
+if (( PORT < 1024 )) && [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+  if command -v authbind >/dev/null 2>&1; then
+    exec authbind --deep python3 -m http.server "$PORT" --bind 0.0.0.0 --directory "$DIR"
+  else
+    exec sudo -E python3 -m http.server "$PORT" --bind 0.0.0.0 --directory "$DIR"
+  fi
+else
+  exec python3 -m http.server "$PORT" --bind 0.0.0.0 --directory "$DIR"
+fi
